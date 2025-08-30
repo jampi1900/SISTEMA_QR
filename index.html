@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proyecto QR</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH">
+
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+      <script src="https://rawgit.com/schmich/instascan-builds/master/instascan.min.js"></script>
+
+</head>
+<body>
+
+    <style>
+      
+
+        [data-status="success"]{
+             --border-color:#01a646;
+        }
+
+        [data-status="error"]{
+             --border-color:#F15152;
+        }
+
+        .form__label{
+            display: grid;
+            gap: .2rem;
+            --message: attr(data-message);
+        }
+        .form__label::after{
+            content: var(--message);
+            color:#F15152;
+        }
+
+        .form__input{
+            border: 1px solid var(--border-color, #ccc); /* color por defecto #ccc */
+            padding: .2rem;
+            border-radius: .2rem;
+        }
+
+
+
+           #QR {
+      width: 400px;
+      height: 300px;
+      border: 2px solid #01675e;
+      border-radius: 10px;
+      object-fit: cover;
+    }
+    #codigoqr {
+      margin-top: 10px;
+      padding: 8px;
+      width: 300px;
+    }
+    #botonqr {
+      margin-top: 10px;
+      padding: 8px 12px;
+      background-color: #01675e;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #botonqr:disabled {
+      background-color: gray;
+      cursor: not-allowed;
+    }
+
+    </style>
+
+
+<div class="row m-5">
+    <div class="col-md-5">
+        <div class="card">
+
+    <form class = "form" novalidate>
+                    <div class="card-header">
+                        Registrar Productos
+                    </div>
+
+        <article>
+        <div class="m-3">
+            <label class="form__label" data-message="" data-status="">
+                Nombre:
+                <input type="text" class="form__input"
+                 id="name" placeholder="Ejem: Computadora"
+                 data-text="Nombre">
+            </label>
+        </div>
+
+        <div class="m-3">
+            <label class="form__label" data-message="" data-status="">
+                Stock:
+                <input type="text" class="form__input"
+                 id="stock" placeholder="Ejem: Computadora"
+                 data-text="Stock">
+            </label>
+        </div>
+
+        </article>
+
+      
+         <div class="m-2"> 
+              <button id="btn-addd" type="submit" class ="form__btn btn btn-success w-100">Agregar</button>
+         </div>
+           
+      
+      
+    </form>
+
+    </div>
+  </div>
+</div>
+
+    <dialog class="form__dialog open" > 
+        <section class = "form__content">
+            <h2>Enviado</h2>
+            <button type="button" id="btn-add" class="btn-success form_btn form__btn--close">Ok</button>
+
+        </section>
+    </dialog>
+
+   
+    <button onclick="ge_todas()">Generar PDF</button>
+
+
+    <table class="table" id="mi_tabla">
+        <thead>
+            <tr>
+                <th>Codigo</th>
+                <th>Nombre</th>
+                <th>Stock</th>
+                <th>Fecha</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+            <tbody></tbody>
+        </thead>
+    </table>
+
+     <video id="QR"></video>
+     <br>
+  <input type="text" id="codigoqr" placeholder="Código QR escaneado" readonly>
+  <br>
+
+ 
+  <!-- Sonido -->
+  <audio id="sonido" src="Sonido.mp3"></audio>
+
+
+  <div id="mis_datos_qr"></div>
+
+
+
+    <script>
+
+        const url = "https://68b1b5d2a860fe41fd5f58ce.mockapi.io/id";
+        
+        const formulario = document.querySelector(".form");
+        const inputStock = document.querySelector("#stock");
+        const inputName = document.querySelector("#name");
+
+        const labels = document.querySelectorAll("[data-status]");
+        const formDialog = document.querySelector(".form__dialog");
+        const closeDialogBtn = document.querySelector(".form__btn--close");
+        let ListaCompleta="";
+
+        const btnAdd = document.querySelector("#btn-add");
+         const btnAddd = document.querySelector("#btn-addd");
+        let editingId = null;
+
+
+        //formulario.addEventListener("submit",handleSubmiForm);
+
+
+
+        formulario.addEventListener("submit", (e) => {
+            e.preventDefault();
+            if (editingId) {
+                updatePersona(editingId);
+                
+                   Swal.fire({
+                        icon: "success",
+                        title: "Edicion completa",
+                        text: "El código se escaneo correctamente.",
+                    });
+                
+            } else {
+                handleSubmiForm(e);
+            }
+        });
+
+
+        function handleSubmiForm(e){
+            e.preventDefault();
+            console.log({
+                inputName,
+                inputStock
+            })
+
+            let statusName  = ValidateFormulario(inputName,6);
+            let statusStock = ValidateFormulario(inputStock,2);
+
+            if (statusName && statusStock){
+                    
+                labels.forEach(function(label){
+                    serDataValue(label,"status");
+                });
+
+                addPersona();
+                formDialog.showModal();
+                formulario.reset();
+            }
+        }
+
+        closeDialogBtn.addEventListener("click",function(){
+            formDialog.close();
+        });
+
+
+        function ValidateFormulario(inputElement,miniLen = 6){
+            let inputLength = inputElement?.value.trim().length ?? 0;
+            console.log(inputLength);
+            let inputName = inputElement.dataset.text;
+            console.log(inputName);
+            let parentLabel = inputElement.closest(".form__label");
+            console.log(parentLabel);
+           
+            if(inputLength >= miniLen){
+                 serDataValue(parentLabel,"message")
+                 serDataValue(parentLabel,"status","success")
+                 return true;
+               
+            }else{
+                 let messageUser = `El ${inputName} nesesita minimo ${miniLen} carácteres para ser validado. `;
+                 serDataValue(parentLabel,"message",messageUser)
+                 serDataValue(parentLabel,"status","error")
+                 return false;
+            }
+
+        }
+
+        function serDataValue(element , atribute , value=""){
+            element.dataset[atribute] = value;
+        }
+
+        const clear = () => {
+            inputName.value = "";
+            inputStock.value = "";
+
+            //cardTitle.innerHTML = "Registrar persona";
+            btnAddd.classList.replace("btn-primary", "btn-success");
+            btnAddd.innerHTML = "Registrar";
+        }
+
+
+
+        const addPersona = () => {
+            const persona = {
+                Producto: inputName.value,
+                Stock: Number(inputStock.value)
+            };
+            
+            fetch(url, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(persona)
+            }).then((res) => {
+                if (!res.ok) {
+                    throw new Error("Error al enviar los datos");
+                }
+                return res.json();
+            }).then((res) => {
+                console.log(res);
+                
+
+                 Swal.fire({
+                        icon: "success",
+                        title: "Persona Registrada",
+                        text: "correctamente.",
+                    });
+
+                clear();
+                listPersonas();
+            })
+            .catch((err) => console.error(err));
+        }
+
+
+        const listPersonas = async () => {
+              try {
+                const res = await fetch(url);
+                if (!res.ok) {
+                    throw new Error("Error al obtener los datos");
+                }
+
+                const personas = await res.json();
+                ListaCompleta = personas;
+
+                const table = document.querySelector("tbody");
+                table.innerHTML = "";
+
+                personas.forEach((persona, index) => {
+                    table.innerHTML += `
+                        <td>${index + 1}</td>
+                        <td>${persona.Producto}</td>
+                        <td>${persona.Stock}</td>
+                        <td>${persona.Fecha}</td>
+                        <td>${persona.Estado}</td>
+                        <td>
+                            <div class="d-flex">
+                                <button class="btn btn-primary" onclick="editPersona(${persona.Id})">Editar</button>
+                                <button class="btn btn-danger ms-1" onclick="deletePersona(${persona.Id})">Eliminar</button>
+                                 <button class="btn btn-success ms-1" onclick="generarFicha(${persona.Id})">Ficha</button>
+                                
+                            </div>
+                        </td>
+                    `;
+                });
+            } catch (err) {
+                console.error(err);
+            }
+}
+
+
+
+        const deletePersona = (id) => {
+            fetch(`${url}/${id}`, {
+                method: "DELETE"
+            }).then((res) => {
+                if (!res.ok) {
+                    throw new Error("Error al eliminar los datos");
+                }
+                return res.json();
+            }).then((res) => {
+                console.log(res);
+                 Swal.fire({
+                        icon: "success",
+                        title: "Persona Eliminada",
+                        text: "correctamente.",
+                    });
+                listPersonas();
+            }).catch((err) => console.error(err));
+        }
+
+
+const updatePersona = (id) => {
+    
+    const persona = {
+        Producto: inputName.value,
+        Stock: Number(inputStock.value),
+    };
+
+    fetch(`${url}/${id}`, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(persona)
+    }).then((res) => {
+        if (!res.ok) {
+            throw new Error("Error al actualizar los datos");
+        }
+        return res.json();
+    }).then((res) => {
+        console.log(res);
+        //alert("Persona actualizada correctamente");
+        clear();
+        editingId = null; // 👈 volvemos a modo "crear"
+        //formulario.removeEventListener("submit", updatePersona);
+        //formulario.addEventListener("submit", handleSubmiForm);
+        listPersonas();
+    }).catch((err) => console.error(err));
+}
+
+
+const editPersona = async (id) => {
+    try {
+        const res = await fetch(`${url}/${id}`);
+        if (!res.ok) {
+            throw new Error("Error al obtener los datos");
+        }
+
+        const persona = await res.json();
+        inputName.value = persona.Producto;
+        inputStock.value = persona.Stock;
+
+        editingId = id; // 👈 ahora sabemos a quién editar
+        //cardTitle.innerHTML = "Actualizar persona";
+        btnAddd.classList.replace("btn-success", "btn-primary");
+        btnAddd.innerHTML = "Actualizar";
+
+        //formulario.removeEventListener("submit", handleSubmiForm);
+        //formulario.addEventListener("submit", (e) => updatePersona(id, e));
+
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+   
+async function generarFicha(id) {
+    try {
+        // Obtener datos
+        const res = await fetch(`${url}/${id}`, { method: "GET" });
+
+        if (!res.ok) {
+            throw new Error("Error al obtener los datos");
+        }
+
+        const persona = await res.json();
+
+        const qr = persona.Id;
+
+        // Crear div temporal
+        const qrDiv = document.createElement("div");
+        document.body.appendChild(qrDiv);
+
+        // Generar QR
+        new QRCode(qrDiv, {
+            text: qr,
+            width: 200,
+            height: 200,
+        });
+
+        // Esperar a que el <img> se genere y cargue
+        const qrImg = qrDiv.querySelector("img");
+        qrImg.onload = () => {
+            // Crear PDF
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            doc.setFontSize(16);
+            doc.text("Ficha del Producto", 20, 20);
+
+            doc.setFontSize(12);
+            doc.text(`ID: ${persona.Id}`, 20, 40);
+            doc.text(`Producto: ${persona.Producto}`, 20, 50);
+            doc.text(`Stock: ${persona.Stock}`, 20, 60);
+            doc.text(`Fecha: ${persona.Fecha}`, 20, 70);
+            doc.text(`Estado: ${persona.Estado}`, 20, 80);
+
+            // Insertar QR ya cargado
+            doc.addImage(qrImg.src, "PNG", 20, 100, 50, 50);
+
+            // Descargar
+            doc.save(`ficha_${persona.Producto}.pdf`);
+
+            document.body.removeChild(qrDiv);
+        };
+    } catch (error) {
+        console.error("Error generando ficha:", error);
+    }
+}
+
+
+
+const sonido = new Audio("Sonido.mp3");
+var codigo_escaneado;
+var scanner = new Instascan.Scanner({
+    video: document.getElementById('QR'),
+    sCanPeriod: 5,
+    mirror: false
+});
+
+
+Instascan.Camera.getCameras().then(function (cameras) {
+    if (cameras.length > 0) {
+        scanner.start(cameras[0]);
+    } else {
+        console.error('No se han encontrado camaras');
+        alert('Camaras no encontradas');
+    }
+}).catch(function (e) {
+    console.error(e);
+    alert("ERROR: " + e);
+});
+
+scanner.addListener('scan', function (respuesta) {
+    sonido.volume = 0.3;
+    sonido.play();
+    console.log("Contenido del qr: " + respuesta);
+    Swal.fire({
+        icon: "success",
+        title: "Codigo escaneado",
+        text: "El código se escaneo correctamente.",
+    });
+    //alert("aaa");
+    codigo_escaneado = respuesta;
+
+    mostrarDatos(codigo_escaneado);
+
+    // Crear el elemento input
+    var codigoInput = document.getElementById("codigoqr");
+    //obtienes el boton
+    var botonqr = document.getElementById("botonqr");
+    botonqr.disabled=false;
+    codigoInput.value = codigo_escaneado;
+    //alert(codigo_escaneado);
+    codigoInput.readOnly = true;
+    //alert("el id del input es: >>" + codigoInput.id + "<<, el codigo escaneado es: >>" + codigo_escaneado);
+});
+
+
+function mostrarDatos(id) {
+    console.log(ListaCompleta);
+    const idBuscado = id;
+    const encontrado = ListaCompleta.find(item => item.Id == idBuscado);
+    const qrr = document.getElementById("mis_datos_qr");
+    qrr.innerHTML = "";
+
+    if(encontrado){
+          qrr.innerHTML = `
+          <p><strong>ID:</strong> ${encontrado.Id}</p>
+          <p><strong>Producto:</strong> ${encontrado.Producto}</p>
+          <p><strong>Stock:</strong> ${encontrado.Stock}</p>
+          <p><strong>Estado:</strong> ${encontrado.Estado}</p>
+        `;
+
+    }else{
+         qrr.innerHTML = "<p style='color:red'>No se encontró el producto</p>";
+    }
+  
+
+  
+ 
+    //alert("el id del input es: " + codigoInput.id + ", el codigo escaneado es: " + codigo_escaneado);
+
+}
+         
+
+
+async function ge_todas() {
+    try {
+        // Obtener todos los productos desde tu API
+        const res = await fetch(url, { method: "GET" });
+
+        if (!res.ok) {
+            throw new Error("Error al obtener los datos");
+        }
+
+        const productos = await res.json(); // Aquí asumo que es un array
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        for (let i = 0; i < productos.length; i++) {
+            const persona = productos[i];
+
+            // Crear div temporal para el QR
+            const qrDiv = document.createElement("div");
+            document.body.appendChild(qrDiv);
+
+            new QRCode(qrDiv, {
+                text: persona.Id,
+                width: 200,
+                height: 200,
+            });
+
+            // Esperar a que se genere el QR
+            const qrImg = qrDiv.querySelector("img");
+
+            await new Promise(resolve => {
+                qrImg.onload = () => resolve();
+            });
+
+            // Escribir datos en el PDF
+            doc.setFontSize(16);
+            doc.text("Ficha del Producto", 20, 20);
+
+            doc.setFontSize(12);
+            doc.text(`ID: ${persona.Id}`, 20, 40);
+            doc.text(`Producto: ${persona.Producto}`, 20, 50);
+            doc.text(`Stock: ${persona.Stock}`, 20, 60);
+            doc.text(`Fecha: ${persona.Fecha}`, 20, 70);
+            doc.text(`Estado: ${persona.Estado}`, 20, 80);
+
+            // Insertar QR
+            doc.addImage(qrImg.src, "PNG", 20, 100, 50, 50);
+
+            // Eliminar div temporal
+            document.body.removeChild(qrDiv);
+
+            // Si no es el último, añadir página nueva
+            if (i < productos.length - 1) {
+                doc.addPage();
+            }
+        }
+
+        // Guardar el PDF con todas las fichas
+        doc.save("todas_las_fichas.pdf");
+
+    } catch (error) {
+        console.error("Error generando fichas:", error);
+    }
+}
+
+
+
+        listPersonas();
+
+
+
+         
+    </script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
